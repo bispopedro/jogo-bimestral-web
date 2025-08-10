@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogo da Memória</title>
+  <style>
+    #nivel {
+      background: #a8dadc;
+      color: #1d3557;
+      border: none;
+      border-radius: 8px;
+      padding: 10px 18px;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: bold;
+      margin: 10px 5px 20px 0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+      outline: none;
+      transition: background 0.2s, color 0.2s;
+      cursor: pointer;
+    }
+    #nivel:focus, #nivel:hover {
+      background: #457b9d;
+      color: #fff;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: linear-gradient(120deg, #1d3557, #457b9d);
+      color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      padding: 20px;
+    }
+    h1 {
+      margin-bottom: 10px;
+      font-size: 2rem;
+    }
+    #cronometro {
+      font-size: 18px;
+      margin-bottom: 20px;
+    }
+    .tabuleiro {
+      display: grid;
+      grid-template-columns: repeat(5, 80px);
+      gap: 15px;
+      perspective: 1000px;
+    }
+    .carta {
+      width: 80px;
+      height: 80px;
+      position: relative;
+      transform-style: preserve-3d;
+      transition: transform 0.6s;
+      cursor: pointer;
+    }
+    .carta.virada {
+      transform: rotateY(180deg);
+      cursor: default;
+    }
+    .frente, .verso {
+      position: absolute;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      font-size: 32px;
+      backface-visibility: hidden;
+    }
+    .frente {
+      background: #fff;
+      color: #000;
+      transform: rotateY(180deg);
+    }
+    .verso {
+      background: #a8dadc;
+      color: #fff;
+    }
+    .mensagem {
+      margin-top: 20px;
+      font-size: 18px;
+    }
+  
+    #btn-iniciar, #btn-nova {
+      background: #25709e;
+      color: #ffffff;
+      border: none;
+      border-radius: 8px;
+      padding: 12px 28px;
+      font-size: 1rem;
+      font-family: inherit;
+      font-weight: bold;
+      margin: 10px 5px 20px 0;
+      cursor: pointer;
+      box-shadow: 0 2px 8px rgba(15, 15, 15, 0.637);
+      transition: background 0.2s, transform 0.2s;
+    }
+    #btn-iniciar:hover, #btn-nova:hover {
+      background: #0f1b2c;
+      transform: translateY(-2px) scale(1.04);
+    }
+    @media (max-width: 600px) {
+      #btn-iniciar, #btn-nova {
+        padding: 10px 16px;
+        font-size: 0.95rem;
+      }
+    }
+    
+    @media (max-width: 600px) {
+      .tabuleiro {
+        grid-template-columns: repeat(4, 60px);
+        gap: 8px;
+      }
+      .carta {
+        width: 60px;
+        height: 60px;
+      }
+      .frente, .verso {
+        font-size: 22px;
+      }
+      h1 {
+        font-size: 1.2rem;
+      }
+      #cronometro {
+        font-size: 15px;
+      }
+    }
+    @media (max-width: 400px) {
+      .tabuleiro {
+        grid-template-columns: repeat(3, 45px);
+        gap: 5px;
+      }
+      .carta {
+        width: 45px;
+        height: 45px;
+      }
+      .frente, .verso {
+        font-size: 14px;
+      }
+      h1 {
+        font-size: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Jogo da Memória</h1>
+  <select id="nivel">
+    <option value="muitofacil">Muito Fácil</option>
+    <option value="facil">Fácil</option>
+    <option value="medio">Médio</option>
+    <option value="dificil">Difícil</option>
+    <option value="expert">Expert</option>
+  </select>
+  <button id="btn-iniciar">Iniciar Jogo</button>
+  <button id="btn-nova" style="display:none; margin-left:10px;">Nova Rodada</button>
+  <div id="placar" style="display:none; margin-bottom:10px; font-size:18px; font-weight:bold;">Pontuação: <span id="pontos">0</span></div>
+  <div id="cronometro" style="display:none;">Tempo: <span id="tempo">300</span>s</div>
+  <div class="tabuleiro" id="tabuleiro" style="display:none;"></div>
+  <div class="mensagem" id="mensagem"></div>
+
+  <script>
+    const emojisBase = [
+      '🍎','🍌','🍇','🍉','🍓','🍍','🥝','🍒','🥥','🍋',
+      '🍊','🍈','🍏','🍐','🍑','🍔','🍕','🍟','🍿','🍩',
+      '🍪','🍫','🍬','🍭','🍮','🍦','🍧','🍨','🍰','🧁',
+      '🍯','🥨','🥐','🥯','🥞','🧇','🥓','🥩','🍗','🍖'
+    ];
+    let emojis = [];
+    let cartas = [];
+    let embaralhadas = [];
+    let primeira = null;
+    let segunda = null;
+    let bloqueado = false;
+    let acertos = 0;
+    let tempo = 300;
+    let intervalo;
+
+    const tabuleiro = document.getElementById('tabuleiro');
+    const tempoEl = document.getElementById('tempo');
+    const cronometro = document.getElementById('cronometro');
+    const mensagem = document.getElementById('mensagem');
+    const btnIniciar = document.getElementById('btn-iniciar');
+    const btnNova = document.getElementById('btn-nova');
+    const placar = document.getElementById('placar');
+    const pontosEl = document.getElementById('pontos');
+    const nivelSel = document.getElementById('nivel');
+
+    function definirNivel() {
+      let nivel = nivelSel.value;
+      if (nivel === 'muitofacil') {
+        emojis = emojisBase.slice(0, 6); 
+        tabuleiro.style.gridTemplateColumns = 'repeat(3, 80px)';
+      } else if (nivel === 'facil') {
+        emojis = emojisBase.slice(0, 10); 
+        tabuleiro.style.gridTemplateColumns = 'repeat(5, 80px)';
+      } else if (nivel === 'medio') {
+        emojis = emojisBase.slice(0, 14); 
+        tabuleiro.style.gridTemplateColumns = 'repeat(7, 80px)';
+      } else if (nivel === 'dificil') {
+        emojis = emojisBase.slice(0, 18); 
+        tabuleiro.style.gridTemplateColumns = 'repeat(9, 80px)';
+      } else {
+        emojis = emojisBase.slice(0, 24); 
+        tabuleiro.style.gridTemplateColumns = 'repeat(12, 80px)';
+      }
+      cartas = [...emojis, ...emojis];
+    }
+
+    function embaralharCartas() {
+      embaralhadas = cartas.slice().sort(() => 0.5 - Math.random());
+    }
+
+    function criarTabuleiro() {
+      tabuleiro.innerHTML = '';
+      embaralhadas.forEach((emoji, i) => {
+        const carta = document.createElement('div');
+        carta.className = 'carta';
+        carta.dataset.emoji = emoji;
+        carta.dataset.index = i;
+
+        const frente = document.createElement('div');
+        frente.className = 'frente';
+        frente.innerText = emoji;
+
+        const verso = document.createElement('div');
+        verso.className = 'verso';
+        verso.innerText = '❓';
+
+        carta.appendChild(frente);
+        carta.appendChild(verso);
+        carta.addEventListener('click', virarCarta);
+
+        tabuleiro.appendChild(carta);
+      });
+    }
+
+
+    let pegadinhaIntervalo;
+    function iniciarCronometro() {
+      tempoEl.innerText = tempo;
+      let segundosPassados = 0;
+      intervalo = setInterval(() => {
+        tempo--;
+        tempoEl.innerText = tempo;
+        segundosPassados++;
+        if (tempo <= 0) {
+          clearInterval(intervalo);
+          clearInterval(pegadinhaIntervalo);
+          bloquearTabuleiro();
+          mensagem.innerText = 'Tempo esgotado!';
+          btnNova.style.display = 'inline-block';
+          setTimeout(() => {
+            mensagem.innerText = '';
+            mostrarInicio();
+          }, 3000);
+        }
+      }, 1000);
+      
+      pegadinhaIntervalo = setInterval(() => {
+        aplicarPegadinha();
+      }, 30000);
+    }
+
+    function aplicarPegadinha() {
+     
+      const cartasNaoViradas = Array.from(document.querySelectorAll('.carta:not(.virada)'));
+      if (cartasNaoViradas.length < 2) return;
+      
+      const embaralhadasCartas = cartasNaoViradas.sort(() => 0.5 - Math.random());
+      const cartasParaTrocar = embaralhadasCartas.slice(0, 4);
+      
+      if (cartasParaTrocar.length >= 2) {
+        for (let i = 0; i < cartasParaTrocar.length - 1; i += 2) {
+          const cartaA = cartasParaTrocar[i];
+          const cartaB = cartasParaTrocar[i+1];
+         
+          const cloneA = cartaA.cloneNode(true);
+          const cloneB = cartaB.cloneNode(true);
+          cartaA.parentNode.replaceChild(cloneB, cartaA);
+          cartaB.parentNode.replaceChild(cloneA, cartaB);
+        }
+       
+        document.querySelectorAll('.carta').forEach(c => {
+          if (!c.classList.contains('virada')) {
+            c.addEventListener('click', virarCarta);
+          }
+        });
+        mensagem.innerText = 'Pegadinha! Algumas cartas mudaram de lugar!';
+        setTimeout(() => { mensagem.innerText = ''; }, 2000);
+      }
+    }
+
+    function bloquearTabuleiro() {
+      const todasCartas = document.querySelectorAll('.carta');
+      todasCartas.forEach(c => c.removeEventListener('click', virarCarta));
+    }
+
+    function resetarJogo() {
+      clearInterval(intervalo);
+      clearInterval(pegadinhaIntervalo);
+      tempo = 300;
+      acertos = 0;
+      primeira = null;
+      segunda = null;
+      bloqueado = false;
+      mensagem.innerText = '';
+      tempoEl.innerText = tempo;
+      pontosEl.innerText = acertos;
+      definirNivel();
+      embaralharCartas();
+      criarTabuleiro();
+    }
+
+    function mostrarInicio() {
+      btnIniciar.style.display = 'inline-block';
+      btnNova.style.display = 'none';
+      nivelSel.style.display = 'inline-block';
+      cronometro.style.display = 'none';
+      tabuleiro.style.display = 'none';
+      placar.style.display = 'none';
+    }
+
+    function iniciarJogo() {
+      btnIniciar.style.display = 'none';
+      btnNova.style.display = 'none';
+      nivelSel.style.display = 'none';
+      cronometro.style.display = 'block';
+      tabuleiro.style.display = 'grid';
+      placar.style.display = 'block';
+      resetarJogo();
+      iniciarCronometro();
+    }
+
+    function novaRodada() {
+      btnNova.style.display = 'none';
+      mensagem.innerText = '';
+      nivelSel.style.display = 'inline-block';
+      resetarJogo();
+      iniciarCronometro();
+    }
+
+    btnIniciar.addEventListener('click', iniciarJogo);
+    btnNova.addEventListener('click', novaRodada);
+
+    function virarCarta(e) {
+      if (bloqueado) return;
+      const carta = e.currentTarget;
+      if (carta.classList.contains('virada')) return;
+
+      carta.classList.add('virada');
+
+      if (!primeira) {
+        primeira = carta;
+      } else {
+        segunda = carta;
+        bloqueado = true;
+
+        if (primeira.dataset.emoji === segunda.dataset.emoji) {
+          primeira = null;
+          segunda = null;
+          bloqueado = false;
+          acertos++;
+          pontosEl.innerText = acertos;
+          if (acertos === emojis.length) {
+            clearInterval(intervalo);
+            mensagem.innerText = 'Parabéns! Você venceu!';
+            btnNova.style.display = 'inline-block';
+            setTimeout(() => {
+              mensagem.innerText = '';
+              mostrarInicio();
+            }, 3000);
+          }
+        } else {
+          setTimeout(() => {
+            primeira.classList.remove('virada');
+            segunda.classList.remove('virada');
+            primeira = null;
+            segunda = null;
+            bloqueado = false;
+          }, 1000);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
